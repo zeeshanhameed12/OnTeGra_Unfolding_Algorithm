@@ -1,90 +1,1069 @@
 # Extensible SPARQL-to-Cypher Unfolding Engine
 
-This refactor separates parsing, mapping resolution, unfolding logic, and Cypher rendering.
+## 1. Project Goal
 
-## Design goals
+This project implements a modular unfolding engine that translates a supported subset of SPARQL into Cypher using declarative mappings.
 
-- Keep the current SPARQL triple-pattern workflow.
-- Support multiple mappings for the same statement pattern using `UNION ALL`.
-- Join different statement patterns using shared SPARQL variables.
-- Keep `SELECT DISTINCT`.
-- Introduce an extensible internal `StatementPattern` model.
-- Make the model interval-ready without hard-coding interval logic throughout the engine.
-- Keep Cypher-specific code out of the parser and mapping resolver.
-- Make future features such as FILTER, OPTIONAL, UNION, taxonomy, and Allen interval relations easier to add.
-
-## Project structure
+The design goal is extensibility: temporal intervals, Allen relations, FILTER, UNION, OPTIONAL, and taxonomy support should be addable without rewriting the whole engine.
 
 ```text
-unfolding_engine_refactor/
+SPARQL Query
+    |
+    v
+SparqlParser
+    |
+    v
+ParsedQuery / StatementPattern
+    |
+    v
+MappingResolver
+    |
+    v
+ResolvedPattern
+    |
+    v
+CypherBuilder
+    |
+    v
+Unfolder
+    |
+    v
+Generated Cypher
+```
+
+---
+
+## 2. Project Structure
+
+```text
+project/
 ├── main.py
 ├── mapping.yaml
 ├── query.sparql
-├── README.md
+├── unfolded.cypher
 ├── unfolding_engine/
 │   ├── __init__.py
 │   ├── models.py
 │   ├── parser.py
 │   ├── mapping_loader.py
 │   ├── mapping_resolver.py
-│   ├── unfolder.py
 │   ├── cypher_builder.py
+│   ├── unfolder.py
 │   └── utils.py
 └── tests/
     ├── __init__.py
     ├── test_parser.py
+    ├── test_mapping_resolver.py
     └── test_unfolder.py
 ```
 
-## Run
+---
+
+## 3. Main Component Dependencies
+
+```text
+                         main.py
+                            |
+             +--------------+--------------+
+             |              |              |
+             v              v              v
+    MappingConfigLoader  SparqlParser    Unfolder
+             |              |              |
+             |              |       +------+------+
+             |              |       |             |
+             |              |       v             v
+             |              | MappingResolver  CypherBuilder
+             |              |       |             |
+             +--------------+-------+-------------+
+                            |
+                            v
+                         models.py
+                            ^
+                            |
+                         utils.py
+```
+
+Responsibilities:
+
+- `models.py`: internal domain objects.
+- `parser.py`: SPARQL text to `ParsedQuery`.
+- `mapping_loader.py`: YAML to `MappingConfig`.
+- `mapping_resolver.py`: complete-target applicability.
+- `cypher_builder.py`: backend-specific Cypher generation.
+- `unfolder.py`: joins, projection, and final unfolding.
+- `utils.py`: shared helper functions.
+
+---
+
+## 4. Internal Statement Model
+
+A normal RDF triple pattern is:
+
+\[
+P_i=(s_i,p_i,o_i)
+\]
+
+where \(s_i\), \(p_i\), and \(o_i\) are subject, predicate, and object.
+
+Python representation:
+
+```python
+StatementPattern(
+    subject="?x",
+    predicate="traffic:follows",
+    object="?y",
+)
+```
+
+The temporal extension is:
+
+\[
+P_i=(s_i,p_i,o_i,I_i)
+\]
+
+with interval:
+
+\[
+I_i=[t_i^s,t_i^e]
+\]
+
+So internally:
+
+\[
+P_i=(s_i,p_i,o_i,t_i^s,t_i^e)
+\]
+
+Python:
+
+```python
+StatementPattern(
+    subject="?x",
+    predicate="traffic:follows",
+    object="?y",
+    interval=IntervalTerm(
+        start="?start",
+        end="?end",
+    ),
+)
+```
+
+---
+
+## 5. Complete Mapping Target
+
+Example mapping:
+
+```yaml
+target:
+  subject: "traffic:vehicle_{{subject_id}}"
+  predicate: "traffic:follows"
+  object: "traffic:vehicle_{{object_id}}"
+  interval:
+    start: "{{P1_start}}"
+    end: "{{P1_end}}"
+```
+
+The target can be written as:
+
+\[
+T_M=(m_s,m_p,m_o,m_{ts},m_{te})
+\]
+
+where the last two components are optional temporal positions.
+
+---
+
+## 6. Complete-Target Mapping Applicability
+
+For query pattern:
+
+\[
+P=(q_s,q_p,q_o)
+\]
+
+and mapping target:
+
+\[
+T_M=(m_s,m_p,m_o)
+\]
+
+the mapping is applicable iff:
+
+\[
+Applicable(M,P)=
+Compatible(q_s,m_s)
+\land
+Compatible(q_p,m_p)
+\land
+Compatible(q_o,m_o)
+\]
+
+For temporal patterns:
+
+\[
+Applicable(M,P)=
+\bigwedge_{k\in Pos(P)}
+Compatible(q_k,m_k)
+\]
+
+where:
+
+\[
+Pos(P)=
+\{
+subject,
+predicate,
+object,
+intervalStart,
+intervalEnd
+\}
+\]
+
+when an interval exists.
+
+Core implementation:
+
+```python
+for position, query_term in query_terms.items():
+
+    if position not in target_terms:
+        return False
+
+    if not mapping_term_can_produce(
+        query_term,
+        target_terms[position],
+        prefixes,
+    ):
+        return False
+
+return True
+```
+
+---
+
+## 7. Compatibility Rules
+
+### Query variable
+
+If:
+
+\[
+q\in Var
+\]
+
+then:
+
+\[
+Compatible(q,m)=true
+\]
+
+A variable can bind to any RDF term generated by the mapping.
+
+### Constant-to-constant
+
+\[
+Compatible(q,m)
+\iff
+Normalize(q)=Normalize(m)
+\]
+
+Example:
+
+```text
+traffic:follows
+```
+
+matches:
+
+```text
+traffic:follows
+```
+
+but not:
+
+```text
+traffic:hasSmallHeadway
+```
+
+### Constant-to-template
+
+If the mapping target is a template:
+
+\[
+Compatible(q,m)
+\iff
+q\in L(m)
+\]
+
+where \(L(m)\) is the set of RDF terms that template \(m\) can generate.
+
+Example:
+
+```text
+traffic:vehicle_{{id}}
+```
+
+can generate:
+
+```text
+traffic:vehicle_101
+```
+
+but not:
+
+```text
+traffic:person_101
+```
+
+---
+
+## 8. Mapping Selection
+
+For pattern \(P_i\):
+
+\[
+\mathcal{M}(P_i)
+=
+\{
+M_j\mid Applicable(M_j,P_i)
+\}
+\]
+
+Cases:
+
+\[
+|\mathcal{M}(P_i)|=0
+\]
+
+No applicable mapping; unfolding fails.
+
+\[
+|\mathcal{M}(P_i)|=1
+\]
+
+One source branch is generated.
+
+\[
+|\mathcal{M}(P_i)|>1
+\]
+
+Branches are combined using `UNION ALL`.
+
+---
+
+## 9. Union Algebra
+
+If applicable mappings generate:
+
+\[
+R_{i1},R_{i2},\ldots,R_{ik}
+\]
+
+then:
+
+\[
+R_i=
+R_{i1}\uplus R_{i2}\uplus\cdots\uplus R_{ik}
+\]
+
+where \(\uplus\) is bag union and corresponds to:
+
+```cypher
+UNION ALL
+```
+
+With duplicate elimination during collection:
+
+\[
+R'_i=
+\delta(
+R_{i1}\uplus\cdots\uplus R_{ik}
+)
+\]
+
+---
+
+## 10. Example Three-Pattern Query
+
+```sparql
+SELECT DISTINCT ?x ?y
+WHERE {
+    ?x rdf:type traffic:Car .
+    ?x traffic:follows ?y .
+    ?y rdf:type traffic:Car .
+}
+```
+
+Define:
+
+\[
+P_1=(?x,\texttt{rdf:type},\texttt{traffic:Car})
+\]
+
+\[
+P_2=(?x,\texttt{traffic:follows},?y)
+\]
+
+\[
+P_3=(?y,\texttt{rdf:type},\texttt{traffic:Car})
+\]
+
+Variable sets:
+
+\[
+Vars(P_1)=\{x\}
+\]
+
+\[
+Vars(P_2)=\{x,y\}
+\]
+
+\[
+Vars(P_3)=\{y\}
+\]
+
+---
+
+## 11. Pattern Dependency
+
+Two patterns depend on each other when they share variables:
+
+\[
+Dep(P_i,P_j)=Vars(P_i)\cap Vars(P_j)
+\]
+
+If:
+
+\[
+Dep(P_i,P_j)\neq\varnothing
+\]
+
+their relations must be joined.
+
+For the example:
+
+\[
+Dep(P_1,P_2)=\{x\}
+\]
+
+\[
+Dep(P_2,P_3)=\{y\}
+\]
+
+\[
+Dep(P_1,P_3)=\varnothing
+\]
+
+Dependency graph:
+
+```text
+P1 ---- ?x ---- P2 ---- ?y ---- P3
+```
+
+---
+
+## 12. Join Algebra
+
+For:
+
+\[
+R_1(x)
+\]
+
+and:
+
+\[
+R_2(x,y)
+\]
+
+the natural/equijoin is:
+
+\[
+R_1\Join_{R_1.x=R_2.x}R_2
+\]
+
+Generated Cypher uses filtered `UNWIND`:
+
+```cypher
+UNWIND [
+    tp1_row IN tp1_rows
+    WHERE tp1_row.tp1_x = tp0_x
+] AS tp1_row
+```
+
+If two variables are shared:
+
+\[
+R_i
+\Join_{
+R_i.x=R_j.x
+\land
+R_i.y=R_j.y
+}
+R_j
+\]
+
+---
+
+## 13. Alias Function
+
+Each SPARQL variable receives a pattern-local alias:
+
+\[
+Alias(i,v)=tp_i\_v
+\]
+
+Examples:
+
+\[
+Alias(0,x)=tp0\_x
+\]
+
+\[
+Alias(1,x)=tp1\_x
+\]
+
+\[
+Alias(1,y)=tp1\_y
+\]
+
+---
+
+## 14. Bound-Variable Set
+
+The unfolding engine remembers variables already introduced.
+
+\[
+B_i=
+\bigcup_{j=1}^{i}Vars(P_j)
+\]
+
+When processing \(P_i\), the shared variables are:
+
+\[
+S_i=
+Vars(P_i)\cap B_{i-1}
+\]
+
+These variables generate join conditions.
+
+The implementation uses:
+
+```python
+bound = {}
+```
+
+---
+
+## 15. Left-Deep Join Plan
+
+The current engine joins sequentially:
+
+\[
+J_1=R_1
+\]
+
+\[
+J_2=J_1\Join R_2
+\]
+
+\[
+J_3=J_2\Join R_3
+\]
+
+Generally:
+
+\[
+J_i=J_{i-1}\Join R_i
+\]
+
+Tree:
+
+```text
+          JOIN
+         /    \
+      JOIN     R3
+     /    \
+   R1      R2
+```
+
+---
+
+## 16. Projection and DISTINCT
+
+SPARQL:
+
+```sparql
+SELECT ?x ?y
+```
+
+corresponds to:
+
+\[
+\pi_{x,y}(R)
+\]
+
+SPARQL:
+
+```sparql
+SELECT DISTINCT ?x ?y
+```
+
+corresponds to:
+
+\[
+\delta(\pi_{x,y}(R))
+\]
+
+The complete three-pattern example is:
+
+\[
+Q=
+\delta
+\left(
+\pi_{x,y}
+\left(
+R_1\Join_x R_2\Join_y R_3
+\right)
+\right)
+\]
+
+---
+
+## 17. Temporal SPARQL Representation
+
+Standard SPARQL uses RDF triples, so do not invent:
+
+```sparql
+?x traffic:follows ?y ?interval .
+```
+
+Instead use normal triples, for example:
+
+```sparql
+PREFIX traffic: <http://example.org/traffic#>
+PREFIX time: <http://www.w3.org/2006/time#>
+
+SELECT ?x ?y ?start ?end
+WHERE {
+
+    GRAPH ?g {
+        ?x traffic:follows ?y .
+    }
+
+    ?g time:hasTime ?interval .
+
+    ?interval traffic:start ?start .
+    ?interval traffic:end ?end .
+}
+```
+
+The parser can normalize these triples into:
+
+```python
+StatementPattern(
+    subject="?x",
+    predicate="traffic:follows",
+    object="?y",
+    interval=IntervalTerm(
+        start="?start",
+        end="?end",
+    ),
+)
+```
+
+Pipeline:
+
+```text
+SPARQL triples
+      |
+      v
+temporal normalization
+      |
+      v
+StatementPattern(s,p,o,I)
+```
+
+---
+
+## 18. Temporal Interval Algebra
+
+An interval is:
+
+\[
+I=[s,e]
+\]
+
+For two intervals:
+
+\[
+I_1=[s_1,e_1]
+\]
+
+\[
+I_2=[s_2,e_2]
+\]
+
+### Non-strict containment
+
+\[
+During(I_2,I_1)
+\iff
+s_2\ge s_1
+\land
+e_2\le e_1
+\]
+
+Cypher:
+
+```cypher
+P2_start >= P1_start
+AND
+P2_end <= P1_end
+```
+
+### Strict Allen during
+
+\[
+During(I_2,I_1)
+\iff
+s_1<s_2
+\land
+e_2<e_1
+\]
+
+The implementation should explicitly choose which semantics are intended.
+
+---
+
+## 19. Important Allen Relations
+
+Given:
+
+\[
+I_1=[s_1,e_1],\qquad
+I_2=[s_2,e_2]
+\]
+
+### Before
+
+\[
+Before(I_1,I_2)\iff e_1<s_2
+\]
+
+### Meets
+
+\[
+Meets(I_1,I_2)\iff e_1=s_2
+\]
+
+### Overlaps
+
+\[
+Overlaps(I_1,I_2)
+\iff
+s_1<s_2<e_1<e_2
+\]
+
+### Starts
+
+\[
+Starts(I_1,I_2)
+\iff
+s_1=s_2\land e_1<e_2
+\]
+
+### During
+
+\[
+During(I_1,I_2)
+\iff
+s_2<s_1\land e_1<e_2
+\]
+
+### Finishes
+
+\[
+Finishes(I_1,I_2)
+\iff
+s_1>s_2\land e_1=e_2
+\]
+
+### Equals
+
+\[
+Equals(I_1,I_2)
+\iff
+s_1=s_2\land e_1=e_2
+\]
+
+### Contains
+
+\[
+Contains(I_1,I_2)
+\iff
+During(I_2,I_1)
+\]
+
+---
+
+## 20. Tailgating Example
+
+Let:
+
+\[
+P_1=Follows(x,y,I_1)
+\]
+
+and:
+
+\[
+P_2=SmallHeadway(x,y,I_2)
+\]
+
+with:
+
+\[
+During(I_2,I_1)
+\]
+
+Logical rule:
+
+\[
+Tailgates(x,y,I_2)
+\leftarrow
+Follows(x,y,I_1)
+\land
+SmallHeadway(x,y,I_2)
+\land
+During(I_2,I_1)
+\]
+
+Relational form:
+
+\[
+R_T=
+\sigma_{
+s_2\ge s_1
+\land
+e_2\le e_1
+}
+\left(
+R_F\Join_{x,y}R_H
+\right)
+\]
+
+Final projection:
+
+\[
+R_{Tailgate}
+=
+\pi_{x,y,s_2,e_2}(R_T)
+\]
+
+---
+
+## 21. FILTER Algebra
+
+SPARQL:
+
+```sparql
+FILTER(
+    ?p2Start >= ?p1Start &&
+    ?p2End <= ?p1End
+)
+```
+
+corresponds to:
+
+\[
+\sigma_{
+p2Start\ge p1Start
+\land
+p2End\le p1End
+}(R)
+\]
+
+Future FILTER support should preferably use an explicit algebra node.
+
+---
+
+## 22. Future Algebra Tree
+
+```text
+DISTINCT
+   |
+PROJECT(x,y)
+   |
+FILTER(During(I2,I1))
+   |
+JOIN(x,y)
+ /       \
+P1       P2
+```
+
+Possible Python representation:
+
+```python
+DistinctNode(
+    child=ProjectNode(
+        variables=["x", "y"],
+        child=FilterNode(
+            condition=TemporalRelation(
+                left="I2",
+                relation="during",
+                right="I1",
+            ),
+            child=JoinNode(
+                left=P1,
+                right=P2,
+            ),
+        ),
+    )
+)
+```
+
+---
+
+## 23. Complete Formal Pipeline
+
+Parsing:
+
+\[
+Q_{SPARQL}
+\overset{parse}{\longrightarrow}
+A_Q
+\]
+
+Mapping resolution:
+
+\[
+A_Q+\mathcal{M}
+\overset{resolve}{\longrightarrow}
+A_M
+\]
+
+Unfolding:
+
+\[
+A_M
+\overset{unfold}{\longrightarrow}
+A_C
+\]
+
+Rendering:
+
+\[
+A_C
+\overset{render}{\longrightarrow}
+Q_{Cypher}
+\]
+
+Overall:
+
+\[
+\boxed{
+Q_{SPARQL}
+\rightarrow
+A_Q
+\rightarrow
+A_M
+\rightarrow
+A_C
+\rightarrow
+Q_{Cypher}
+}
+\]
+
+---
+
+## 24. Implementation-to-Algebra Mapping
+
+| Implementation | Algebraic meaning |
+|---|---|
+| `StatementPattern` | query atom \(P_i\) |
+| `IntervalTerm` | interval \(I=[s,e]\) |
+| `MappingResolver` | applicability relation |
+| multiple applicable mappings | bag union \(\uplus\) |
+| `UNION ALL` | bag union |
+| `bound` | bound-variable set \(B_i\) |
+| `join_conditions` | equijoin predicate |
+| filtered `UNWIND` | join execution |
+| `projection` | projection \(\pi\) |
+| `RETURN DISTINCT` | duplicate elimination \(\delta\) |
+| future `FILTER` | selection \(\sigma\) |
+| future `TemporalRelation` | Allen interval predicate |
+
+---
+
+## 25. Running the Project
+
+Install dependency:
 
 ```bash
 pip install pyyaml
+```
+
+Run:
+
+```bash
 python main.py
 ```
 
-The generated query is written to:
+Run tests:
+
+```bash
+python -m unittest discover
+```
+
+Generated output:
 
 ```text
 unfolded.cypher
 ```
 
-## Interval-ready model
+---
 
-Internally, a statement is represented as:
+## 26. Recommended Development Order
 
-```python
-StatementPattern(
-    subject="?x",
-    predicate="traffic:follows",
-    object="?y",
-    interval=None,
-)
+1. Complete-target mapping applicability.
+2. Mapping resolver tests.
+3. Temporal SPARQL normalization.
+4. Interval start/end mapping.
+5. `TemporalRelation` model.
+6. `during`.
+7. Remaining Allen relations.
+8. General FILTER support.
+9. SPARQL UNION.
+10. OPTIONAL.
+11. Taxonomy support.
+12. Explicit query-algebra tree.
+
+Main design rule:
+
+```text
+Adding a feature
+        !=
+rewriting the whole engine
 ```
 
-Later, the same engine can represent:
+The target architecture is:
 
-```python
-StatementPattern(
-    subject="?x",
-    predicate="traffic:follows",
-    object="?y",
-    interval=IntervalTerm(start="?start", end="?end"),
-)
+```text
+SPARQL
+   |
+   v
+Query Algebra
+   |
+   v
+Mapping Resolution
+   |
+   v
+Unfolded Algebra
+   |
+   v
+Backend Translation
+   |
+   v
+Cypher
 ```
-
-The current parser intentionally stays compatible with ordinary SPARQL triples. Temporal query syntax should be introduced as a separate parser extension instead of embedding ad-hoc fourth-position syntax into standard SPARQL.
-
-## Recommended next extension
-
-Add a temporal algebra node, for example:
-
-```python
-TemporalRelation(
-    relation="during",
-    left_interval="p2",
-    right_interval="p1",
-)
-```
-
-and let `CypherBuilder` translate it into backend-specific interval conditions.
