@@ -325,12 +325,12 @@ traffic:person_101
 For pattern $P_i$:
 
 $$
-|\mathcal{M}(P_i)
+|\mathcal{M}(P_i)$$
 =
 \{
 |M_j\mid Applicable(M_j,P_i)
 \}
-$$
+
 
 Cases:
 
