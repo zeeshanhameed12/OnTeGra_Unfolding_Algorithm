@@ -1,8 +1,6 @@
 # Extensible SPARQL-to-Cypher Unfolding Engine
 
 
-> **Math rendering:** This README uses GitHub Markdown math syntax. Inline equations use `$...$` and display equations use `$$...$$`. When viewed on GitHub, subscripts, superscripts, Greek symbols, set notation, and relational-algebra operators should render correctly.
-
 ## 1. Project Goal
 
 This project implements a modular unfolding engine that translates a supported subset of SPARQL into Cypher using declarative mappings.
