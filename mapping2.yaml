@@ -1,0 +1,38 @@
+prefixes:
+  rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  traffic: "http://example.org/traffic#"
+
+sources:
+
+  cars:
+    query: |
+      MATCH (v:Vehicle)
+      RETURN v.vehicle_id AS id
+
+  follows:
+    query: |
+      MATCH (a:Vehicle)-[r:FOLLOWS]->(b:Vehicle)
+      RETURN
+        a.vehicle_id AS subject_id,
+        b.vehicle_id AS object_id,
+        r.start AS P1_start,
+        r.end AS P1_end
+
+mappings:
+
+  - mappingId: M-Car
+    source: cars
+    target:
+      subject: "traffic:vehicle_{{id}}"
+      predicate: "rdf:type"
+      object: "traffic:Car"
+
+  - mappingId: M-Follows
+    source: follows
+    target:
+      subject: "traffic:vehicle_{{subject_id}}"
+      predicate: "traffic:follows"
+      object: "traffic:vehicle_{{object_id}}"
+      interval:
+        start: "{{P1_start}}"
+        end: "{{P1_end}}"

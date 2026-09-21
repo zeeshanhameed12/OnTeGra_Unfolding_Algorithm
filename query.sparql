@@ -1,0 +1,15 @@
+PREFIX traffic: <http://example.org/traffic#>
+PREFIX time: <http://www.w3.org/2006/time#>
+
+SELECT ?x ?y ?start ?end
+WHERE {
+
+    GRAPH ?g {
+        ?x traffic:follows ?y .
+    }
+
+    ?g time:hasTime ?interval .
+
+    ?interval traffic:start ?start .
+    ?interval traffic:end ?end .
+}
