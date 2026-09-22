@@ -523,3 +523,47 @@ def template_to_cypher(
     return " + ".join(
         parts
     )
+
+
+
+
+# ============================================================
+# SOURCE VALUE TO CYPHER
+# ============================================================
+
+def source_value_to_cypher(
+    template: str,
+) -> str:
+    """
+    Convert a direct source reference such as:
+
+        {{P1_start}}
+
+    into:
+
+        P1_start
+
+    without converting it to a string.
+
+    This is intended for numeric/date/temporal values,
+    not for IRI construction.
+    """
+
+    match = re.fullmatch(
+        r"\{\{\s*"
+        r"([A-Za-z_][A-Za-z0-9_]*)"
+        r"\s*\}\}",
+        template,
+    )
+
+
+    if not match:
+
+        raise ValueError(
+            "Expected a direct source variable "
+            f"such as '{{{{P1_start}}}}', "
+            f"but received: {template}"
+        )
+
+
+    return match.group(1)

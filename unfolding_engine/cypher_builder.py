@@ -9,6 +9,7 @@ from .utils import (
     is_variable,
     make_alias,
     template_to_cypher,
+    source_value_to_cypher,
     variable_name,
 )
 
@@ -23,6 +24,21 @@ class CypherBuilder:
 
     def __init__(self, config: MappingConfig):
         self.config = config
+
+    def _value_expr(self, template: str) -> str:
+        """
+        Use `source_value_to_cypher` for direct source variable templates
+        like `{{P1_start}}`, otherwise fall back to
+        `template_to_cypher` which produces string-concatenation Cypher.
+        """
+
+        try:
+            # Direct source variable -> return raw variable name
+            return source_value_to_cypher(template)
+
+        except ValueError:
+            # Not a direct source reference -> build Cypher expression
+            return template_to_cypher(template, self.config.prefixes)
 
     def build_pattern_relation(
         self,
@@ -85,17 +101,14 @@ CALL () {{
 
         source_query = self.config.sources[mapping.source].query
 
-        subject_expr = template_to_cypher(
+        subject_expr = self._value_expr(
             mapping.target.subject,
-            self.config.prefixes,
         )
-        predicate_expr = template_to_cypher(
+        predicate_expr = self._value_expr(
             mapping.target.predicate,
-            self.config.prefixes,
         )
-        object_expr = template_to_cypher(
+        object_expr = self._value_expr(
             mapping.target.object,
-            self.config.prefixes,
         )
 
         return_expressions: list[str] = []
@@ -130,13 +143,11 @@ CALL () {{
                     f"Mapping '{mapping.mapping_id}' has no interval.end."
                 )
 
-            start_expr = template_to_cypher(
+            start_expr = self._value_expr(
                 mapping.target.interval_start,
-                self.config.prefixes,
             )
-            end_expr = template_to_cypher(
+            end_expr = self._value_expr(
                 mapping.target.interval_end,
-                self.config.prefixes,
             )
 
             if is_variable(pattern.interval.start):

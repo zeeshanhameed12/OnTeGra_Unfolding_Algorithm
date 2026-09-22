@@ -1,15 +1,46 @@
 PREFIX traffic: <http://example.org/traffic#>
 PREFIX time: <http://www.w3.org/2006/time#>
 
-SELECT ?x ?y ?start ?end
+SELECT
+    ?x
+    ?y
+    ?p1Start
+    ?p1End
+    ?p2Start
+    ?p2End
+
 WHERE {
 
-    GRAPH ?g {
+    GRAPH ?followingGraph {
         ?x traffic:follows ?y .
     }
 
-    ?g time:hasTime ?interval .
+    ?followingGraph
+        time:hasTime
+        ?p1Interval .
 
-    ?interval traffic:start ?start .
-    ?interval traffic:end ?end .
+    ?p1Interval
+        traffic:start
+        ?p1Start .
+
+    ?p1Interval
+        traffic:end
+        ?p1End .
+
+
+    GRAPH ?headwayGraph {
+        ?x traffic:small_headway ?y .
+    }
+
+    ?headwayGraph
+        time:hasTime
+        ?p2Interval .
+
+    ?p2Interval
+        traffic:start
+        ?p2Start .
+
+    ?p2Interval
+        traffic:end
+        ?p2End .
 }

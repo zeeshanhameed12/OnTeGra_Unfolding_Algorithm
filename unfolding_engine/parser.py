@@ -14,7 +14,7 @@ class SparqlParser:
     # ========================================================
     # SELECT
     # ========================================================
-
+        # select_re contains a regular expression pattern that matches the SELECT clause of a SPARQL query. It captures the DISTINCT keyword (if present) and the variables being selected. The pattern is case-insensitive and allows for multiline queries.
     SELECT_RE = re.compile(
 
         r"SELECT\s+"
@@ -26,8 +26,6 @@ class SparqlParser:
         |
         re.DOTALL,
     )
-
-
     # ========================================================
     # GRAPH BLOCK
     # ========================================================

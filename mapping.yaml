@@ -221,8 +221,8 @@ sources:
       RETURN
         vehicle AS vehicle_id, 
         gapInterval.follower AS following_vehicle_id,
-        gapInterval.start AS interval_start,
-        gapInterval.end AS interval_end,
+        gapInterval.start AS P2_start,
+        gapInterval.end AS P2_end,
         gapInterval.lane AS lane,
         //gapInterval.timestamps AS timestamps, 
         //gapInterval.spaceHeadways AS space_headways, 
@@ -692,10 +692,10 @@ mappings:
       interval:
 
         start:
-          "{{P1_start}}"
+          "{{P2_start}}"
 
         end:
-          "{{P1_end}}"
+          "{{P2_end}}"
 
   # ==========================================================
   # M2 - Tailgates
@@ -719,10 +719,10 @@ mappings:
       interval:
 
         start:
-          "{{P1_start}}"
+          "{{Scenario7_start}}"
 
         end:
-          "{{P1_end}}"
+          "{{Scenario7_end}}"
 
   
 
