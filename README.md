@@ -266,30 +266,8 @@ $$
 
 not $x=y$. If the two RDF-term constructors are incompatible, the mapping combination cannot contribute to the query result.
 
----
 
-
-## 8. Implementation-to-Algebra Mapping
-
-| Implementation | Algebraic meaning |
-|---|---|
-| `StatementPattern` | query atom $P_i$ |
-| `IntervalTerm` | interval $I=[s,e]$ |
-| `MappingResolver` | applicability relation |
-| multiple applicable mappings | bag union $\uplus$ |
-| `UNION ALL` | bag union |
-| `bound` | bound-variable set $B_i$ |
-| `join_conditions` | equijoin predicate |
-| filtered `UNWIND` | join execution |
-| `projection` | projection $\pi$ |
-| `RETURN DISTINCT` | duplicate elimination $\delta$ |
-| future `FILTER` | selection $\sigma$ |
-| future `TemporalRelation` | Allen interval predicate |
-
----
-
-
-## 9. Running the Project
+## 8. Running the Project
 
 Install dependency:
 
