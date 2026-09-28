@@ -281,10 +281,15 @@ Run:
 python main.py
 ```
 
-Generated output:
+python main.py will generate output:
 
 ```text
 unfolded.cypher
 ```
+Run:
 
+```bash
+python unfolded.cypher
+```
+to get RDF-triples
 ---
