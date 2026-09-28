@@ -221,26 +221,6 @@ intervalEnd
 \}
 $$
 
-when an interval exists.
-
-Core implementation:
-
-```python
-for position, query_term in query_terms.items():
-
-    if position not in target_terms:
-        return False
-
-    if not mapping_term_can_produce(
-        query_term,
-        target_terms[position],
-        prefixes,
-    ):
-        return False
-
-return True
-```
-
 ---
 
 ## 7. RDF-Term Compatibility and Joins

@@ -119,4 +119,4 @@ class Compatibility(Enum):
 
     INCOMPATIBLE = "incompatible"
 
-    POSSIBLE = "possible"
+    #POSSIBLE = "possible"
