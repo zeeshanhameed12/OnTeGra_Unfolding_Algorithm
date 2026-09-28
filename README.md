@@ -281,12 +281,6 @@ Run:
 python main.py
 ```
 
-Run tests:
-
-```bash
-python -m unittest discover
-```
-
 Generated output:
 
 ```text
