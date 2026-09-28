@@ -3,9 +3,9 @@
 
 ## 1. Project Goal
 
-This project implements a modular unfolding engine that translates a supported subset of SPARQL into Cypher using declarative mappings.
+In this repositiory we are building dynamic unfolding engine that translates a subset of SPARQL into Cypher.
 
-The design goal is extensibility: temporal intervals, Allen relations, FILTER, UNION, OPTIONAL, and taxonomy support should be addable without rewriting the whole engine.
+The design goal is extensibility: temporal intervals, Allen relations, FILTER, UNION, OPTIONAL.
 
 ```text
 SPARQL Query
@@ -36,6 +36,7 @@ Generated Cypher
 
 ## 2. Project Structure
 
+Here is a tentative initial structure of the project and will be updated time by time with the progress of our development.
 ```text
 project/
 ├── main.py
