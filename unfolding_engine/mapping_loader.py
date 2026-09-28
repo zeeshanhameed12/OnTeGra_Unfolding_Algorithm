@@ -21,7 +21,12 @@ class MappingConfigLoader:
     1. Read YAML.
     2. Load prefixes.
     3. Load source queries.
-    4. Validate mapping targets.
+    4. Load mapping definitions.
+       I. Validate mapping IDs.
+       II. Validate mapping sources.
+       III. Validate mapping targets.
+          a. Validate that subject, predicate, and object are defined.
+          b. Validate that temporal targets are well-formed.
     5. Convert YAML dictionaries into domain objects.
     """
 
@@ -330,7 +335,7 @@ class MappingConfigLoader:
     # VALIDATE COMPLETE TARGET
     # ========================================================
 
-    def _validate_target(
+    def _validate_target( 
         self,
         mapping_id: str,
         target: dict,

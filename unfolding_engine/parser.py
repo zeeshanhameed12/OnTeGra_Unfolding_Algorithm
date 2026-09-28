@@ -10,6 +10,22 @@ from .models import (
 
 
 class SparqlParser:
+    """
+    1. build SELECT_RE for parsing SELECT clause
+    2. build GRAPH_RE for parsing GRAPH blocks
+    3. build TRIPLE_RE for parsing triple patterns
+    4. implement parse() method to extract SELECT variables, DISTINCT flag, and statement patterns
+        I. implement _parse_temporal_patterns() method to extract statement patterns from GRAPH blocks and associate them with temporal interval
+        II. implement _extract_all_triples() method to extract all triples from a given text
+        III. implement _find_object() method to find the object of a given subject-predicate pair in a list of triples
+    5. return ParsedQuery object containing select_variables, distinct, and triple patterns
+    6. ensure that the parser can handle queries with or without temporal information
+    """
+
+
+
+
+
 
     # ========================================================
     # SELECT

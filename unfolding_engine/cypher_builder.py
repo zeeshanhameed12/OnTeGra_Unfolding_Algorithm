@@ -16,6 +16,8 @@ from .utils import (
 
 class CypherBuilder:
     """
+    Determines how to generate the Cypher code for each statement pattern and its mappings. The generated Cypher code is then used by the Unfolder to construct the final unfolded query.
+    
     Backend-specific Cypher generation.
 
     The rest of the unfolding engine does not need to know the concrete Cypher
@@ -91,8 +93,11 @@ CALL () {{
         self,
         tp_index: int,
         pattern,
-        mapping: MappingDefinition,
+        resolved_mapping,
     ) -> str:
+
+
+        mapping = resolved_mapping.mapping
         if mapping.source not in self.config.sources:
             raise ValueError(
                 f"Mapping '{mapping.mapping_id}' refers to unknown "

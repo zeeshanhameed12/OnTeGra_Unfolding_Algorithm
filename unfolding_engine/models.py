@@ -300,21 +300,42 @@ class SourceDefinition:
 
 
 # ============================================================
-# RESOLVED PATTERN
+# RESOLVED MAPPING AND PATTERN 
 # ============================================================
 
 @dataclass(frozen=True)
+class VariableBinding:
+    """
+    Stores how a SPARQL variable is generated
+    by a mapping target.
+    """
+
+    variable: str
+
+    rdf_term: str
+
+
+
+@dataclass(frozen=True)
+class ResolvedMapping:
+    """
+    Mapping plus variable generation information.
+    """
+
+    mapping: MappingDefinition
+
+    bindings: dict[str, VariableBinding]
+
+
+
+@dataclass(frozen=True)
 class ResolvedPattern:
-    """
-    A statement pattern together with all mappings
-    that can generate it.
-    """
 
     index: int
 
     pattern: StatementPattern
 
-    mappings: list[MappingDefinition]
+    mappings: list[ResolvedMapping]
 
 
 # ============================================================

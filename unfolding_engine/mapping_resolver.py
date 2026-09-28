@@ -4,8 +4,10 @@ from .models import (
     MappingConfig,
     MappingDefinition,
     ParsedQuery,
+    ResolvedMapping,
     ResolvedPattern,
     StatementPattern,
+    VariableBinding,
 )
 
 from .utils import (
@@ -27,7 +29,7 @@ class MappingResolver:
         predicate
         object
 
-    Future temporal positions:
+     with optional temporal positions:
 
         interval_start
         interval_end
@@ -118,7 +120,7 @@ class MappingResolver:
     def _find_applicable_mappings(
         self,
         pattern: StatementPattern,
-    ) -> list[MappingDefinition]:
+) -> list[ResolvedMapping]:
         """
         Test all mappings against one statement pattern.
         """
@@ -129,13 +131,21 @@ class MappingResolver:
         for mapping in self.config.mappings:
 
             if self._matches(
-                mapping,
-                pattern,
+                        mapping,
+                        pattern,
             ):
 
-                applicable.append(
-                    mapping
-                )
+                    bindings = self._build_bindings(
+                        mapping,
+                        pattern,
+                    )
+
+                    applicable.append(
+                        ResolvedMapping(
+                            mapping=mapping,
+                            bindings=bindings
+                        )
+                    )
 
 
         return applicable
@@ -209,16 +219,6 @@ class MappingResolver:
             query_term,
         ) in query_terms.items():
 
-            # ------------------------------------------------
-            # Mapping cannot generate this position.
-            #
-            # Important for temporal queries.
-            #
-            # Example:
-            #
-            # query has interval_start
-            # but mapping has no interval.
-            # ------------------------------------------------
 
             if position not in target_terms:
 
@@ -262,3 +262,32 @@ class MappingResolver:
         # ----------------------------------------------------
 
         return True
+
+    def _build_bindings(
+        self,
+        mapping: MappingDefinition,
+        pattern: StatementPattern,
+    ):
+
+        bindings = {}
+
+        query_terms = pattern.position_terms()
+
+        target_terms = (
+            mapping.target.position_terms()
+        )
+
+
+        for position, query_term in query_terms.items():
+
+            if query_term.startswith("?"):
+
+                variable = query_term[1:]
+
+                bindings[variable] = VariableBinding(
+                    variable=variable,
+                    rdf_term=target_terms[position]
+                )
+
+
+        return bindings

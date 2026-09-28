@@ -1,4 +1,4 @@
-PREFIX traffic: <http://example.org/traffic#>
+PREFIX traffic: <http://example.org/>
 PREFIX time: <http://www.w3.org/2006/time#>
 
 SELECT

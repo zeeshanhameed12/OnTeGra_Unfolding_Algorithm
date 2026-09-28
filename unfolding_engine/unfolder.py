@@ -8,19 +8,20 @@ from .utils import make_alias
 
 class Unfolder:
     """
-    Main application service.
+    Convert a parsed query into a Cypher query string.
 
     Responsibilities:
-    - resolve mappings,
-    - ask the backend builder for one relation per statement pattern,
-    - build joins from shared variables,
-    - build final projection.
-
-    It deliberately does not parse files and does not load YAML itself.
+    - Resolve each statement pattern against the configured mappings.
+    - Use CypherBuilder to generate one relation per statement pattern.
+    - Join those relations by matching shared query variables.
+    - Track variable aliases for joins and the final projection.
+    - Validate that every SELECT variable is bound by a statement pattern.
+    - Build the RETURN clause, preserving SELECT order and DISTINCT.
+    - Assemble and return the generated Cypher query string.
     """
 
-    def __init__(self, config: MappingConfig): # def __init__(self, config: MappingConfig): is the constructor method for the Unfolder class. It takes a single argument, config, which is expected to be an instance of the MappingConfig class. This method initializes the Unfolder instance by setting up its configuration and creating instances of MappingResolver and CypherBuilder, which are used for resolving mappings and building Cypher queries, respectively.
-        self.config = config # config is an instance of the MappingConfig class that contains the configuration settings for the Unfolder. It is stored as an instance variable self.config so that it can be accessed by other methods within the Unfolder class.
+    def __init__(self, config: MappingConfig): 
+        self.config = config 
         self.resolver = MappingResolver(config)
         self.cypher_builder = CypherBuilder(config)
 
@@ -52,6 +53,10 @@ class Unfolder:
                     join_conditions.append(
                         f"{row_name}.{current_alias} = {previous_alias}"
                     )
+                    print(
+                        "Joining variable:",
+                    variable
+                            )
 
             rows_to_unwind = rows_name
 
